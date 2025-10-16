@@ -3,8 +3,8 @@ pragma solidity ^0.8.30;
 
 import {IERC20} from "./IERC20.sol";
 
-// Constant product AMM X * Y = K
-contract CPMM {
+// Constant sum AMM X + Y = K
+contract CSAMM {
     IERC20 public immutable token0;
     IERC20 public immutable token1;
 
@@ -42,36 +42,16 @@ contract CPMM {
 
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);
 
-        uint256 amountInWithFee = (_amountIn * 997) / 1000;
+        uint256 amountIn = tokenIn.balanceOf(address(this)) - reserveIn;
+        amountOut = (amountIn * 997) / 1000;
 
-        // ydx / (x + dx) = dy
-        amountOut =
-            (reserveOut * amountInWithFee) /
-            (reserveIn + amountInWithFee);
+        (uint256 reserve0_, uint256 reserve1_) = _tokenIn == address(token0)
+            ? (reserveIn + amountIn, reserveOut - amountOut)
+            : (reserveOut - amountOut, reserveIn + amountIn);
 
         tokenOut.transferFrom(address(this), msg.sender, amountOut);
 
-        _update(
-            token0.balanceOf(address(this)),
-            token1.balanceOf(address(this))
-        );
-    }
-
-    function _sqrt(uint256 y) private pure returns (uint256 z) {
-        if (y > 3) {
-            z = y;
-            uint256 x = y / 2 + 1;
-            while (x < z) {
-                z = x;
-                x = (y / x + x) / 2;
-            }
-        } else if (y != 0) {
-            z = 1;
-        }
-    }
-
-    function _min(uint256 x, uint256 y) private pure returns (uint256) {
-        return x <= y ? x : y;
+        _update(reserve0_, reserve1_);
     }
 
     function _mint(address _to, uint256 _amount) private {
@@ -86,26 +66,16 @@ contract CPMM {
         token0.transferFrom(msg.sender, address(this), _amount0);
         token1.transferFrom(msg.sender, address(this), _amount1);
 
-        //  dy = y / x * dx
+        uint256 bal0 = token0.balanceOf(address(this));
+        uint256 bal1 = token1.balanceOf(address(this));
 
-        if (reserve0 > 0 || reserve1 > 0) {
-            require(
-                reserve0 * _amount1 == reserve1 * _amount0,
-                "x / y != dx / dy"
-            );
-        }
-        /*
-        How many shares to mint?
-        if T = 0: sqrt(xy) 
-        else: min(dx * T / x, dy * T, y)
-        */
+        uint256 d0 = bal0 - reserve0;
+        uint256 d1 = bal1 - reserve1;
+
         if (totalSupply == 0) {
-            shares = _sqrt(_amount0 * _amount1);
+            shares = ((d0 + d1) * totalSupply) / (reserve0 + reserve1);
         } else {
-            shares = _min(
-                (_amount0 * totalSupply) / reserve0,
-                (_amount1 * totalSupply) / reserve1
-            );
+            shares = d0 + d1;
         }
         require(shares > 0, "shares = 0");
         _mint(msg.sender, shares);
@@ -115,6 +85,7 @@ contract CPMM {
             token1.balanceOf(address(this))
         );
     }
+
     function _burn(address _from, uint256 _amount) private {
         balanceOf[_from] -= _amount;
         totalSupply -= _amount;
@@ -123,18 +94,12 @@ contract CPMM {
     function removeLiquidity(
         uint256 _shares
     ) external returns (uint256 amount0, uint256 amount1) {
-        // How many shares to burn
-        // dx = s * x / T
-        // dy = s * y / T
-
-        uint256 bal0 = token0.balanceOf(address(this));
-        uint256 bal1 = token1.balanceOf(address(this));
-
-        amount0 = (_shares * reserve0) / totalSupply;
-        amount1 = (_shares * reserve1) / totalSupply;
+        // a = L * s / T
+        amount0 = (reserve0 * _shares) / totalSupply;
+        amount1 = (reserve1 * _shares) / totalSupply;
 
         _burn(msg.sender, _shares);
-        _update(bal0 - amount0, bal1 - amount1);
+        _update(reserve0 - amount0, reserve1 - amount1);
 
         token0.transfer(msg.sender, amount0);
         token1.transfer(msg.sender, amount1);
