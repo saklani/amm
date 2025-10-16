@@ -3,6 +3,4 @@ pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-contract CPMMtest is Test {
-
-}
+contract CPMMtest is Test {}

@@ -25,20 +25,11 @@ contract CSAMM {
         reserve1 = _reserve1;
     }
 
-    function swap(
-        address _tokenIn,
-        uint256 _amountIn
-    ) external returns (uint256 amountOut) {
+    function swap(address _tokenIn, uint256 _amountIn) external returns (uint256 amountOut) {
         require(_amountIn > 0, "amount in = 0");
 
-        (
-            IERC20 tokenIn,
-            uint256 reserveIn,
-            IERC20 tokenOut,
-            uint256 reserveOut
-        ) = (_tokenIn == address(token0))
-                ? (token0, reserve0, token1, reserve1)
-                : (token1, reserve1, token0, reserve0);
+        (IERC20 tokenIn, uint256 reserveIn, IERC20 tokenOut, uint256 reserveOut) =
+            (_tokenIn == address(token0)) ? (token0, reserve0, token1, reserve1) : (token1, reserve1, token0, reserve0);
 
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);
 
@@ -59,10 +50,7 @@ contract CSAMM {
         totalSupply += _amount;
     }
 
-    function addLiquidity(
-        uint256 _amount0,
-        uint256 _amount1
-    ) external returns (uint256 shares) {
+    function addLiquidity(uint256 _amount0, uint256 _amount1) external returns (uint256 shares) {
         token0.transferFrom(msg.sender, address(this), _amount0);
         token1.transferFrom(msg.sender, address(this), _amount1);
 
@@ -80,10 +68,7 @@ contract CSAMM {
         require(shares > 0, "shares = 0");
         _mint(msg.sender, shares);
 
-        _update(
-            token0.balanceOf(address(this)),
-            token1.balanceOf(address(this))
-        );
+        _update(token0.balanceOf(address(this)), token1.balanceOf(address(this)));
     }
 
     function _burn(address _from, uint256 _amount) private {
@@ -91,9 +76,7 @@ contract CSAMM {
         totalSupply -= _amount;
     }
 
-    function removeLiquidity(
-        uint256 _shares
-    ) external returns (uint256 amount0, uint256 amount1) {
+    function removeLiquidity(uint256 _shares) external returns (uint256 amount0, uint256 amount1) {
         // a = L * s / T
         amount0 = (reserve0 * _shares) / totalSupply;
         amount1 = (reserve1 * _shares) / totalSupply;
